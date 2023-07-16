@@ -42,7 +42,19 @@
 
     (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
                                                       "(-> x ^Thread (anything) __prefix__ FOO)")))
-    => (just '(".interrupt"))))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
+                                                      "(-> x (Thread.) __prefix__ FOO)")))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
+                                                      "(-> (Thread/currentThread) __prefix__ FOO)")))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".i" (-ns) (ctx/cache-context
+                                                    "(-> Thread/MAX_PRIORITY __prefix__)")))
+    => (just '(".intValue"))))
 
 (deftest thread-last-test
   (fact "`->>` works with Compliment"
@@ -60,7 +72,19 @@
 
     (strip-tags (src/members-candidates ".su" (-ns) (ctx/cache-context
                                                      "(->> thread __prefix__)")))
-    => (just '(".suspend"))))
+    => (just '(".suspend"))
+
+    (strip-tags (src/members-candidates ".su" (-ns) (ctx/cache-context
+                                                     "(->> (Thread.) __prefix__)")))
+    => (just '(".suspend"))
+
+    (strip-tags (src/members-candidates ".su" (-ns) (ctx/cache-context
+                                                     "(->> (Thread/currentThread) __prefix__)")))
+    => (just '(".suspend"))
+
+    (strip-tags (src/members-candidates ".i" (-ns) (ctx/cache-context
+                                                     "(->> Thread/MAX_PRIORITY __prefix__)")))
+    => (just '(".intValue"))))
 
 (deftest doto-test
   (in-ns 'compliment.sources.t-class-members)
@@ -79,7 +103,19 @@
 
     (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
                                                       "(doto thread (__prefix__) .checkAccess)")))
-    => (just '(".interrupt"))))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
+                                                      "(doto (Thread.) (__prefix__) .checkAccess)")))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".int" (-ns) (ctx/cache-context
+                                                      "(doto (Thread/currentThread) (__prefix__) .checkAccess)")))
+    => (just '(".interrupt"))
+
+    (strip-tags (src/members-candidates ".i" (-ns) (ctx/cache-context
+                                                      "(doto Thread/MAX_PRIORITY (__prefix__))")))
+    => (just '(".intValue"))))
 
 (deftest class-members-test
   (in-ns 'compliment.sources.t-class-members)

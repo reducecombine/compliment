@@ -1,5 +1,7 @@
 (ns compliment.utils
   "Functions and utilities for source implementations."
+  (:require [clojure.reflect :as reflect]
+            [clojure.string :as string])
   (:import [clojure.lang Cons LazySeq Var]
            [java.io File]
            [java.nio.file Files]
@@ -18,7 +20,7 @@
 (def ^String resource-separator
   "The path separator used within resources and .jar files.
 
-Note that should always have the same value, regardless of OS."
+  Note that should always have the same value, regardless of OS."
   "/")
 
 (defn split-by-leading-literals
@@ -267,8 +269,75 @@ Note that should always have the same value, regardless of OS."
     (and (= (class var-from-invocation) Var)
          (-> var-from-invocation meta :tag))))
 
+(defn ctor-sym->class-sym [x]
+  (->> x str butlast (apply str) symbol))
+
+(defn ctor-sym? [x]
+  (and (symbol? x)
+       (-> x str last #{\.})))
+
+(defn static-field-sym->class [x ns]
+  (and (-> x str (string/includes? "/"))
+       (-> x str (string/split #"/") first symbol (->> (resolve-class ns)))
+       ;; static fields are OK to eval:
+       ;; (another approach being clojure.reflect)
+       (class (eval x))))
+
+(def prim-mappings
+  {'int      `Integer
+   'ints     `Integer
+   'long     `Long
+   'longs    `Long
+   'float    `Float
+   'floats   `Float
+   'double   `Double
+   'doubles  `Double
+   'short    `Short
+   'shorts   `Short
+   'boolean  `Boolean
+   'booleans `Boolean
+   'byte     `Byte
+   'bytes    `Byte
+   'char     `Character
+   'chars    `Character})
+
+;; (->> (clojure.reflect/reflect Thread) :members (keep :return-type) (map remove-generic))
+(defn remove-generic [s]
+  (-> s str (string/replace #"\<.*" "") symbol))
+
+(defn static-call->class [[x & args] ns]
+  (let [[candidate method] (-> x str (string/split #"/") (->> (map symbol)))
+        class-object (resolve-class ns candidate)]
+    (when class-object ;; when truthy, we're inpecting an actual method (and not a Clojure function)
+      (let [target-count (count args)]
+        (->> class-object
+             reflect/reflect
+             :members
+             (filter (comp #{method} :name))
+             (filter (fn [{:keys [parameter-types]}]
+                       (-> parameter-types count (= target-count))))
+             (keep :return-type)
+             (map remove-generic)
+             (map (fn [x]
+                    (get prim-mappings x x)))
+             (keep (partial resolve-class ns))
+             ;; pick an arbitrary one - could be improved in a future:
+             first)))))
+
+;; NOTE should be `java-interop->classes`, really, but might imply a big refactor
 (defn java-interop->class
   "Given a `form` that may represent a Java interop form (e.g. constructor call, method call), return its class."
   [ns form]
-  ;; TODO implement
-  nil)
+  (let [static-field (delay (static-field-sym->class form ns))]
+    (cond
+      (and (seq? form)
+           (-> form first ctor-sym?))
+      (->> form first ctor-sym->class-sym (resolve-class ns))
+
+      (and (seq? form)
+           (-> form first qualified-symbol?))
+      (static-call->class form ns)
+
+      (and (symbol? form)
+           @static-field)
+      @static-field)))
