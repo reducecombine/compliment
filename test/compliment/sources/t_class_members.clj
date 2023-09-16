@@ -3,7 +3,8 @@
             [compliment.context :as ctx]
             [compliment.sources.class-members :as src]
             [compliment.t-helpers :refer :all]
-            [fudje.sweet :refer :all]))
+            [fudje.sweet :refer :all]
+            [clojure.string :as str]))
 
 (defn- -ns [] (find-ns 'compliment.sources.t-class-members))
 
@@ -208,27 +209,39 @@
   (fact "static class members have docs"
     (src/static-member-doc "Integer/parseInt" (-ns)) => (checker string?)))
 
+(def java-version (-> (System/getProperty "java.version")
+                      (str/split #"\.")
+                      first
+                      read-string))
+
 (deftest literals-inference-test
-  (fact "Has around 19 candidates (give or take, varies per JDK),
+  (testing "Vector literals"
+    (let [candidates-count (count (src/members-candidates "." (-ns) (ctx/cache-context
+                                                                     "(__prefix__ [])")))
+          {:keys [major minor]} *clojure-version*
+          expected (if (and (= 1 major)
+                            (< minor 12))
+                     18
+                     19)]
+      (fact "Has around 19 candidates (give or take, varies per *clojure-version*),
 which indicates that the members are an exact match against the class of `[]`"
-    (let [c (count (src/members-candidates "." (-ns) (ctx/cache-context
-                                                      "(__prefix__ [])")))]
-      (< 17 c 21))
-    =>
-    truthy)
+        candidates-count => expected))
 
 
-  (fact "A docstring is offered for the previous query"
-    (src/members-doc ".assocN" (-ns)) => (checker string?))
+    (fact "A docstring is offered for the previous query"
+      (src/members-doc ".assocN" (-ns)) => (checker string?)))
 
-  (fact "Has around 50 candidates (give or take, varies per JDK),
+  (testing "String literals"
+    (let [candidates-count (count (src/members-candidates "." (-ns) (ctx/cache-context
+                                                                     "(__prefix__ \"\")")))
+          expected (case java-version
+                     1 35
+                     11 43
+                     50)]
+      (fact "Has around 50 candidates (give or take, varies per JDK),
 which indicates that the members are an exact match against the class of `\"\"`"
-    (let [c (count (src/members-candidates "." (-ns) (ctx/cache-context
-                                                      "(__prefix__ \"\")")))]
-      (< 34 c 52))
-    =>
-    truthy)
+        candidates-count => expected))
 
-  (fact "A docstring is offered for the previous query"
-    (src/members-doc ".codePointBefore" (-ns))
-    => (checker string?)))
+    (fact "A docstring is offered for the previous query"
+      (src/members-doc ".codePointBefore" (-ns))
+      => (checker string?))))
